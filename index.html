@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Alchemist's Periodic Cauldron</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Pixel Art Retro -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- Tone.js untuk efek suara retro chiptune tanpa file eksternal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        /* Pengaturan dasar pixel art dan anti-seleksi untuk layar Android */
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: 'Press Start 2P', monospace;
+            background-color: #140c1c;
+            color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: manipulation;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated;
+        }
+
+        /* Border khas game RPG Pixel Art */
+        .pixel-box {
+            background-color: #261b33;
+            border: 4px solid #0d0812;
+            box-shadow: 
+                inset -4px -4px 0px #171021,
+                inset 4px 4px 0px #412f57,
+                0 6px 0 rgba(0,0,0,0.5);
+        }
+
+        .pixel-btn {
+            background-color: #6b3e75;
+            border: 3px solid #0d0812;
+            box-shadow: 
+                inset -3px -3px 0px #42234a,
+                inset 3px 3px 0px #9c62a8;
+            transition: transform 0.05s;
+        }
+        .pixel-btn:active {
+            transform: translateY(3px);
+            box-shadow: inset 2px 2px 0px #42234a;
+        }
+
+        /* Kartu Unsur Tabel Periodik */
+        .element-card {
+            width: 66px;
+            height: 74px;
+            flex-shrink: 0;
+            border: 3px solid #0d0812;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 4px;
+            cursor: grab;
+            position: relative;
+            transition: transform 0.1s;
+            box-shadow: inset -3px -3px 0px rgba(0,0,0,0.35), inset 3px 3px 0px rgba(255,255,255,0.3);
+        }
+
+        .element-card:active {
+            cursor: grabbing;
+            transform: scale(1.08);
+        }
+
+        /* Warna Kategori Unsur */
+        .cat-nonmetal  { background-color: #2e8b57; color: #eafff2; }
+        .cat-alkali    { background-color: #c0392b; color: #ffecea; }
+        .cat-alkaline  { background-color: #d35400; color: #fff3e6; }
+        .cat-halogen   { background-color: #8e44ad; color: #f8ebff; }
+        .cat-metal     { background-color: #2980b9; color: #ebf7ff; }
+        .cat-metalloid { background-color: #0e7490; color: #ecfeff; }
+        .cat-noble     { background-color: #16a085; color: #e6fffb; }
+
+        /* Animasi Getar Layar saat Ledakan */
+        @keyframes screenShake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            10% { transform: translate(-14px, -12px) rotate(-1.5deg); }
+            20% { transform: translate(14px, 10px) rotate(1.5deg); }
+            30% { transform: translate(-12px, 14px) rotate(-1deg); }
+            40% { transform: translate(12px, -10px) rotate(1deg); }
+            50% { transform: translate(-8px, 8px) rotate(-0.5deg); }
+            60% { transform: translate(8px, -8px) rotate(0.5deg); }
+            70% { transform: translate(-5px, 5px) rotate(0deg); }
+            80% { transform: translate(5px, -5px) rotate(0deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        .shake-active {
+            animation: screenShake 0.65s ease-out;
+        }
+
+        /* Scrollbar halus untuk rak unsur di HP & Desktop */
+        .elements-tray {
+            overflow-x: auto;
+            overflow-y: hidden;
+            touch-action: pan-x;
+            scroll-behavior: smooth;
+            scrollbar-width: thin;
+            scrollbar-color: #9c62a8 #171021;
+        }
+        .elements-tray::-webkit-scrollbar {
+            height: 6px;
+        }
+        .elements-tray::-webkit-scrollbar-track {
+            background: #171021;
+            border-radius: 3px;
+        }
+        .elements-tray::-webkit-scrollbar-thumb {
+            background: #9c62a8;
+            border-radius: 3px;
+        }
+
+        /* Noda Jelaga Asap di Layar setelah Meledak */
+        .soot-overlay {
+            background: radial-gradient(circle at center, rgba(20, 20, 20, 0.88) 25%, rgba(10, 10, 10, 0.4) 75%, transparent 100%);
+            pointer-events: none;
+            transition: opacity 2.5s ease-out;
+        }
+    </style>
+</head>
+<body class="flex flex-col justify-between items-center relative" id="game-wrapper">
+
+    <!-- Canvas Utama untuk Background Rumah Penyihir, Tungku Kuali, Partikel & Ledakan -->
+    <canvas id="witchCanvas" class="absolute inset-0 w-full h-full z-0"></canvas>
+
+    <!-- Overlay Jelaga Hitam Pasca Ledakan -->
+    <div id="sootScreen" class="soot-overlay absolute inset-0 z-30 opacity-0 flex flex-col items-center justify-center">
+        <div class="text-center px-4">
+            <p class="text-red-500 text-lg sm:text-2xl drop-shadow-[0_4px_0_#000] mb-2">DUARRR!!</p>
+            <p class="text-yellow-300 text-[10px] sm:text-xs drop-shadow-[0_2px_0_#000]">REAKSI GAGAL! KUALI MELEDAK!</p>
+        </div>
+    </div>
+
+    <!-- HEADER UI: Skor, Nyawa, dan Tombol Buku Resep -->
+    <header class="w-full z-20 px-3 pt-2 pb-1 flex justify-between items-center gap-2">
+        <div class="pixel-box px-2.5 py-2 flex items-center gap-2">
+            <span class="text-yellow-400 text-[10px] sm:text-xs">SKOR:</span>
+            <span id="scoreDisplay" class="text-white text-xs sm:text-sm">0</span>
+        </div>
+
+        <div class="pixel-box px-2.5 py-2 flex items-center gap-1" id="heartsDisplay">
+            <!-- Hati Nyawa diisi lewat JS -->
+        </div>
+
+        <button id="btnGrimoire" class="pixel-btn px-2.5 py-2 text-[9px] sm:text-xs text-yellow-200 flex items-center gap-1 cursor-pointer">
+            <span>📖</span>
+            <span>RESEP</span>
+        </button>
+    </header>
+
+    <!-- AREA TENGAH: Status Bahan di Tungku & Tombol Campur / Kosongkan -->
+    <main class="w-full flex-1 z-20 flex flex-col justify-between items-center pointer-events-none px-3 py-1">
+        
+        <!-- Misi / Petunjuk Singkat dari Penyihir -->
+        <div class="pixel-box px-3 py-1.5 text-center max-w-md pointer-events-auto">
+            <p class="text-[8px] sm:text-[10px] text-purple-300 mb-0.5">✨ TUGAS PENYIHIR ✨</p>
+            <p id="questHint" class="text-[9px] sm:text-[10px] text-amber-200 leading-relaxed">
+                Tarik atau klik unsur ke dalam tungku kuali di bawah!
+            </p>
+        </div>
+
+        <!-- Slot Unsur yang sudah masuk ke dalam Tungku (Tepat di atas Kuali) -->
+        <div class="flex flex-col items-center mb-1 pointer-events-auto">
+            <div class="flex items-center gap-2 mb-1.5 bg-black/65 px-3 py-1 border-2 border-purple-900">
+                <div id="slot1" class="w-9 h-9 sm:w-10 sm:h-10 border-2 border-dashed border-purple-400 flex items-center justify-center text-xs text-purple-300 bg-purple-950/60">?</div>
+                <span class="text-yellow-400 text-xs">+</span>
+                <div id="slot2" class="w-9 h-9 sm:w-10 sm:h-10 border-2 border-dashed border-purple-400 flex items-center justify-center text-xs text-purple-300 bg-purple-950/60">?</div>
+                <span class="text-yellow-400 text-xs">+</span>
+                <div id="slot3" class="w-9 h-9 sm:w-10 sm:h-10 border-2 border-dashed border-purple-400/50 flex items-center justify-center text-[8px] text-purple-400 bg-purple-950/40">OPT</div>
+            </div>
+
+            <!-- Tombol Aksi Tungku -->
+            <div class="flex gap-3">
+                <button id="btnClear" class="pixel-btn !bg-stone-700 px-3 py-1.5 text-[9px] sm:text-[10px] text-stone-200 cursor-pointer">
+                    🗑️ BUANG
+                </button>
+                <button id="btnBrew" class="pixel-btn !bg-emerald-700 px-4 py-1.5 text-[9px] sm:text-[10px] text-emerald-100 cursor-pointer">
+                    🔥 RACIK!
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER UI: Rak Tabel Periodik Panjang Se-Layar (Landscape Full Width & Scrollable) -->
+    <footer class="w-full z-20 px-2 pb-2">
+        <div class="pixel-box w-full p-2">
+            <div class="flex justify-between items-center mb-1.5 px-1">
+                <span class="text-[8px] sm:text-[9px] text-purple-300">◀ RAK UNSUR PERIODIK (GESER / KLIK) ▶</span>
+                <span id="discoveredCount" class="text-[8px] sm:text-[9px] text-emerald-400">0/24 RAMUAN</span>
+            </div>
+            <div class="flex items-center gap-1.5 w-full">
+                <!-- Tombol Scroll Kiri -->
+                <button id="btnScrollLeft" class="pixel-btn px-2 py-6 text-xs text-yellow-300 shrink-0 cursor-pointer" aria-label="Scroll Kiri">
+                    ◀
+                </button>
+                <!-- Daftar Kartu Unsur Full Width -->
+                <div id="elementsRack" class="elements-tray flex-1 flex gap-2 pb-1.5">
+                    <!-- Kartu unsur di-generate otomatis oleh JavaScript -->
+                </div>
+                <!-- Tombol Scroll Kanan -->
+                <button id="btnScrollRight" class="pixel-btn px-2 py-6 text-xs text-yellow-300 shrink-0 cursor-pointer" aria-label="Scroll Kanan">
+                    ▶
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ELEMEN BAYANGAN SAAT DRAG (Mengikuti jari di layar Android) -->
+    <div id="dragGhost" class="fixed pointer-events-none z-50 hidden transform -translate-x-1/2 -translate-y-1/2 scale-110"></div>
+
+    <!-- MODAL BUKU RESEP (GRIMOIRE) -->
+    <div id="grimoireModal" class="fixed inset-0 bg-black/80 z-40 hidden flex items-center justify-center p-4">
+        <div class="pixel-box w-full max-w-md max-h-[80vh] flex flex-col p-4">
+            <div class="flex justify-between items-center border-b-4 border-purple-950 pb-2 mb-3">
+                <h2 class="text-xs sm:text-sm text-yellow-300">📖 BUKU RAMUAN KIMIA</h2>
+                <button id="btnCloseGrimoire" class="pixel-btn !bg-red-700 px-2.5 py-1 text-xs text-white cursor-pointer">X</button>
+            </div>
+            <div id="recipeList" class="overflow-y-auto space-y-2.5 pr-1 text-[9px] sm:text-[10px]" style="touch-action: pan-y;">
+                <!-- Daftar resep diisi lewat JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL HASIL RACIKAN SUKSES / GAME OVER -->
+    <div id="resultModal" class="fixed inset-0 bg-black/80 z-40 hidden flex items-center justify-center p-4">
+        <div class="pixel-box w-full max-w-sm p-5 text-center">
+            <div id="resultIcon" class="text-4xl mb-3">🧪</div>
+            <h2 id="resultTitle" class="text-sm sm:text-base text-emerald-300 mb-2">RAMUAN BERHASIL!</h2>
+            <p id="resultFormula" class="text-xs text-yellow-300 mb-2">H₂O (Air Murni)</p>
+            <p id="resultDesc" class="text-[9px] sm:text-[10px] text-purple-200 leading-relaxed mb-5">
+                Dua hidrogen dan satu oksigen menyatu menjadi air kehidupan.
+            </p>
+            <button id="btnNextResult" class="pixel-btn !bg-emerald-700 px-5 py-2.5 text-xs text-white cursor-pointer">
+                LANJUTKAN
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. DATA UNSUR TABEL PERIODIK (32 UNSUR) & RESEP ALCHEMY (24 RAMUAN)
+         * ============================================================================
+         */
+        const ELEMENTS = [
+            { symbol: 'H',  number: 1,  name: 'Hidrogen',   category: 'cat-nonmetal'  },
+            { symbol: 'He', number: 2,  name: 'Helium',     category: 'cat-noble'     },
+            { symbol: 'Li', number: 3,  name: 'Litium',     category: 'cat-alkali'    },
+            { symbol: 'Be', number: 4,  name: 'Berilium',   category: 'cat-alkaline'  },
+            { symbol: 'B',  number: 5,  name: 'Boron',      category: 'cat-metalloid' },
+            { symbol: 'C',  number: 6,  name: 'Karbon',     category: 'cat-nonmetal'  },
+            { symbol: 'N',  number: 7,  name: 'Nitrogen',   category: 'cat-nonmetal'  },
+            { symbol: 'O',  number: 8,  name: 'Oksigen',    category: 'cat-nonmetal'  },
+            { symbol: 'F',  number: 9,  name: 'Fluorin',    category: 'cat-halogen'   },
+            { symbol: 'Ne', number: 10, name: 'Neon',       category: 'cat-noble'     },
+            { symbol: 'Na', number: 11, name: 'Natrium',    category: 'cat-alkali'    },
+            { symbol: 'Mg', number: 12, name: 'Magnesium',  category: 'cat-alkaline'  },
+            { symbol: 'Al', number: 13, name: 'Aluminium',  category: 'cat-metal'     },
+            { symbol: 'Si', number: 14, name: 'Silikon',    category: 'cat-metalloid' },
+            { symbol: 'P',  number: 15, name: 'Fosfor',     category: 'cat-nonmetal'  },
+            { symbol: 'S',  number: 16, name: 'Belerang',   category: 'cat-nonmetal'  },
+            { symbol: 'Cl', number: 17, name: 'Klorin',     category: 'cat-halogen'   },
+            { symbol: 'Ar', number: 18, name: 'Argon',      category: 'cat-noble'     },
+            { symbol: 'K',  number: 19, name: 'Kalium',     category: 'cat-alkali'    },
+            { symbol: 'Ca', number: 20, name: 'Kalsium',    category: 'cat-alkaline'  },
+            { symbol: 'Ti', number: 22, name: 'Titanium',   category: 'cat-metal'     },
+            { symbol: 'Cr', number: 24, name: 'Kromium',    category: 'cat-metal'     },
+            { symbol: 'Mn', number: 25, name: 'Mangan',     category: 'cat-metal'     },
+            { symbol: 'Fe', number: 26, name: 'Besi',       category: 'cat-metal'     },
+            { symbol: 'Cu', number: 29, name: 'Tembaga',    category: 'cat-metal'     },
+            { symbol: 'Zn', number: 30, name: 'Seng',       category: 'cat-metal'     },
+            { symbol: 'Br', number: 35, name: 'Bromin',     category: 'cat-halogen'   },
+            { symbol: 'Ag', number: 47, name: 'Perak',      category: 'cat-metal'     },
+            { symbol: 'I',  number: 53, name: 'Yodium',     category: 'cat-halogen'   },
+            { symbol: 'Au', number: 79, name: 'Emas',       category: 'cat-metal'     },
+            { symbol: 'Hg', number: 80, name: 'Raksa',      category: 'cat-metal'     },
+            { symbol: 'Pb', number: 82, name: 'Timbal',     category: 'cat-metal'     }
+        ];
+
+        const RECIPES = [
+            {
+                id: 'water',
+                ingredients: ['H', 'H', 'O'],
+                formula: 'H₂O',
+                name: 'Ramuan Air Murni',
+                color: '#38bdf8',
+                hint: 'Gabungkan 2 Hidrogen (H) + 1 Oksigen (O).',
+                desc: 'Cairan dasar kehidupan! Api tungku berkilau biru tenang.'
+            },
+            {
+                id: 'salt',
+                ingredients: ['Na', 'Cl'],
+                formula: 'NaCl',
+                name: 'Kristal Garam Dapur',
+                color: '#f8fafc',
+                hint: 'Gabungkan logam reaktif Natrium (Na) + Klorin (Cl).',
+                desc: 'Dua unsur berbahaya yang bersatu menjadi garam penolak roh jahat!'
+            },
+            {
+                id: 'co2',
+                ingredients: ['C', 'O', 'O'],
+                formula: 'CO₂',
+                name: 'Asap Karbon Dioksida',
+                color: '#94a3b8',
+                hint: 'Bakar 1 Karbon (C) dengan 2 Oksigen (O).',
+                desc: 'Kabut tebal misterius keluar dari dalam tungku penyihir.'
+            },
+            {
+                id: 'rust',
+                ingredients: ['Fe', 'O'],
+                formula: 'FeO',
+                name: 'Bubuk Besi Oksida',
+                color: '#ea580c',
+                hint: 'Padukan Besi (Fe) dengan Oksigen (O).',
+                desc: 'Besi berkarat merah menyala, bahan dasar pewarna sihir!'
+            },
+            {
+                id: 'pyrite',
+                ingredients: ['Fe', 'S', 'S'],
+                formula: 'FeS₂',
+                name: 'Pirit (Emas Palsu)',
+                color: '#facc15',
+                hint: 'Campur 1 Besi (Fe) dengan 2 Belerang (S).',
+                desc: 'Berkilau seperti emas, sering dipakai penyihir pemula!'
+            },
+            {
+                id: 'so2',
+                ingredients: ['S', 'O', 'O'],
+                formula: 'SO₂',
+                name: 'Gas Belerang Dioksida',
+                color: '#a3e635',
+                hint: 'Reaksikan 1 Belerang (S) + 2 Oksigen (O).',
+                desc: 'Aroma menyengat khas kawah gunung berapi memenuhi ruangan.'
+            },
+            {
+                id: 'methane',
+                ingredients: ['C', 'H', 'H'],
+                formula: 'CH₂ (Metilena)',
+                name: 'Esensi Gas Rawa',
+                color: '#c084fc',
+                hint: 'Gabungkan 1 Karbon (C) dan 2 Hidrogen (H).',
+                desc: 'Gas ungu menyala yang membuat api kuali melompat-lompat!'
+            },
+            {
+                id: 'auric',
+                ingredients: ['Au', 'Cl', 'Cl'],
+                formula: 'AuCl₂',
+                name: 'Eliksir Emas Klorida',
+                color: '#fbbf24',
+                hint: 'Larutkan Emas murni (Au) dengan 2 Klorin (Cl).',
+                desc: 'Ramuan alkimia tingkat tinggi berwarna emas berkilauan!'
+            },
+            {
+                id: 'silica',
+                ingredients: ['Si', 'O', 'O'],
+                formula: 'SiO₂',
+                name: 'Pasir Kristal Kuarsa',
+                color: '#e2e8f0',
+                hint: 'Padukan 1 Silikon (Si) dengan 2 Oksigen (O).',
+                desc: 'Bahan utama untuk membuat bola kristal ramalan penyihir!'
+            },
+            {
+                id: 'lime',
+                ingredients: ['Ca', 'O'],
+                formula: 'CaO',
+                name: 'Kapur Tohor Penyihir',
+                color: '#fef9c3',
+                hint: 'Panaskan Kalsium (Ca) bersama Oksigen (O).',
+                desc: 'Bubuk putih panas yang digunakan menggambar lingkaran perlindungan.'
+            },
+            {
+                id: 'magnesia',
+                ingredients: ['Mg', 'O'],
+                formula: 'MgO',
+                name: 'Cahaya Kilat Magnesium',
+                color: '#ffffff',
+                hint: 'Bakar Magnesium (Mg) dengan Oksigen (O).',
+                desc: 'Memancarkan cahaya putih menyilaukan ke seluruh pondok!'
+            },
+            {
+                id: 'no2',
+                ingredients: ['N', 'O', 'O'],
+                formula: 'NO₂',
+                name: 'Kabut Nitrogen Dioksida',
+                color: '#b45309',
+                hint: 'Campur 1 Nitrogen (N) + 2 Oksigen (O).',
+                desc: 'Asap cokelat kemerahan yang melayang berat di atas kuali.'
+            },
+            {
+                id: 'cuo',
+                ingredients: ['Cu', 'O'],
+                formula: 'CuO',
+                name: 'Abu Tembaga Hitam',
+                color: '#14b8a6',
+                hint: 'Reaksikan Tembaga (Cu) dengan Oksigen (O).',
+                desc: 'Menghasilkan nyala api biru-kehijauan yang sangat mistis!'
+            },
+            {
+                id: 'lif',
+                ingredients: ['Li', 'F'],
+                formula: 'LiF',
+                name: 'Garam Kristal Litium',
+                color: '#f472b6',
+                hint: 'Satukan logam ringan Litium (Li) + Fluorin (F).',
+                desc: 'Kristal bening pemfokus energi sihir tingkat lanjut.'
+            },
+            {
+                id: 'kcl',
+                ingredients: ['K', 'Cl'],
+                formula: 'KCl',
+                name: 'Garam Kalium Alkimia',
+                color: '#e879f9',
+                hint: 'Campurkan Kalium (K) dengan Klorin (Cl).',
+                desc: 'Membuat percikan api kuali berubah menjadi warna ungu lavender!'
+            },
+            {
+                id: 'phosphide',
+                ingredients: ['Al', 'P'],
+                formula: 'AlP',
+                name: 'Bubuk Asap Fosfida',
+                color: '#84cc16',
+                hint: 'Padukan Aluminium (Al) dengan Fosfor (P).',
+                desc: 'Bubuk gelap yang mengeluarkan asap hijau pekat saat terkena udara!'
+            },
+            {
+                id: 'cinnabar',
+                ingredients: ['Hg', 'S'],
+                formula: 'HgS',
+                name: 'Batu Merah Cinnabar',
+                color: '#dc2626',
+                hint: 'Satukan Raksa (Hg) dengan Belerang (S).',
+                desc: 'Kristal merah darah legendaris yang diburu para alkemis kuno!'
+            },
+            {
+                id: 'silver_bromide',
+                ingredients: ['Ag', 'Br'],
+                formula: 'AgBr',
+                name: 'Kristal Cermin Perak',
+                color: '#cbd5e1',
+                hint: 'Padukan Perak (Ag) dengan Bromin (Br).',
+                desc: 'Bubuk sensitif cahaya untuk menangkap bayangan roh di cermin!'
+            },
+            {
+                id: 'lead_iodide',
+                ingredients: ['Pb', 'I', 'I'],
+                formula: 'PbI₂',
+                name: 'Hujan Emas Alkimia',
+                color: '#eab308',
+                hint: 'Campur Timbal (Pb) dengan 2 Yodium (I).',
+                desc: 'Membentuk kristal kuning berkilauan yang melayang seperti hujan emas!'
+            },
+            {
+                id: 'zinc_sulfide',
+                ingredients: ['Zn', 'S'],
+                formula: 'ZnS',
+                name: 'Bubuk Pendar Fosfor',
+                color: '#22c55e',
+                hint: 'Reaksikan Seng (Zn) bersama Belerang (S).',
+                desc: 'Menyala hijau terang di dalam kegelapan malam pondok penyihir!'
+            },
+            {
+                id: 'titanium_dioxide',
+                ingredients: ['Ti', 'O', 'O'],
+                formula: 'TiO₂',
+                name: 'Pigmen Putih Abadi',
+                color: '#f1f5f9',
+                hint: 'Panaskan 1 Titanium (Ti) + 2 Oksigen (O).',
+                desc: 'Serbuk putih sangat terang yang memantulkan sinar bulan!'
+            },
+            {
+                id: 'manganese_dioxide',
+                ingredients: ['Mn', 'O', 'O'],
+                formula: 'MnO₂',
+                name: 'Batu Katalis Hitam',
+                color: '#64748b',
+                hint: 'Gabungkan 1 Mangan (Mn) dengan 2 Oksigen (O).',
+                desc: 'Mempercepat gelembung reaksi di dalam tungku secara drastis!'
+            },
+            {
+                id: 'chromium_oxide',
+                ingredients: ['Cr', 'O'],
+                formula: 'CrO',
+                name: 'Esensi Zamrud Hijau',
+                color: '#10b981',
+                hint: 'Padukan Kromium (Cr) dengan Oksigen (O).',
+                desc: 'Memberikan warna hijau zamrud pekat pada ramuan penyihir!'
+            },
+            {
+                id: 'beryllium_oxide',
+                ingredients: ['Be', 'O'],
+                formula: 'BeO',
+                name: 'Kristal Tahan Api',
+                color: '#38bdf8',
+                hint: 'Satukan Berilium (Be) dengan Oksigen (O).',
+                desc: 'Kristal langka yang mampu menahan panas api naga!'
+            }
+        ];
+
+        /**
+         * ============================================================================
+         * 2. STATE PERMAINAN & EFEK SUARA (TONE.JS)
+         * ============================================================================
+         */
+        let gameState = {
+            score: 0,
+            hearts: 3,
+            maxHearts: 3,
+            cauldronIngredients: [],
+            discoveredRecipes: new Set(),
+            currentQuest: null,
+            liquidColor: '#10b981',
+            isExploding: false,
+            cauldronBounds: { x: 0, y: 0, w: 0, h: 0 }
+        };
+
+        let audioInitialized = false;
+        function initAudio() {
+            if (!audioInitialized && typeof Tone !== 'undefined') {
+                Tone.start();
+                audioInitialized = true;
+            }
+        }
+
+        function playSound(type) {
+            try {
+                initAudio();
+                if (typeof Tone === 'undefined') return;
+                const synth = new Tone.Synth({
+                    oscillator: { type: 'square' },
+                    envelope: { attack: 0.01, decay: 0.15, sustain: 0.05, release: 0.2 }
+                }).toDestination();
+
+                if (type === 'drop') {
+                    synth.triggerAttackRelease('C5', '16n');
+                    setTimeout(() => synth.triggerAttackRelease('G5', '16n'), 70);
+                } else if (type === 'success') {
+                    synth.triggerAttackRelease('C5', '16n');
+                    setTimeout(() => synth.triggerAttackRelease('E5', '16n'), 90);
+                    setTimeout(() => synth.triggerAttackRelease('G5', '16n'), 180);
+                    setTimeout(() => synth.triggerAttackRelease('C6', '8n'), 270);
+                } else if (type === 'clear') {
+                    synth.triggerAttackRelease('A3', '16n');
+                } else if (type === 'explosion') {
+                    const noise = new Tone.NoiseSynth({
+                        noise: { type: 'brown' },
+                        envelope: { attack: 0.01, decay: 0.8, sustain: 0.1, release: 0.5 }
+                    }).toDestination();
+                    noise.triggerAttackRelease('0.9');
+                    synth.triggerAttackRelease('C2', '4n');
+                }
+            } catch (e) {
+                console.warn('Audio error:', e);
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 3. RENDERING PIXEL ART RUMAH PENYIHIR & TUNGKU RAKSASA (CANVAS)
+         * ============================================================================
+         */
+        const canvas = document.getElementById('witchCanvas');
+        const ctx = canvas.getContext('2d');
+        const PIXEL_SCALE = 4; // Ukuran 1 pixel art = 4x4 pixel layar
+        let width = 0;
+        let height = 0;
+        let frameCount = 0;
+
+        // Sistem Partikel untuk Api Tungku, Gelembung Ramuan & Ledakan Layar
+        let bubbles = [];
+        let fireParticles = [];
+        let explosionParticles = [];
+        let smokeClouds = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            width = Math.floor(canvas.width / PIXEL_SCALE);
+            height = Math.floor(canvas.height / PIXEL_SCALE);
+            ctx.imageSmoothingEnabled = false;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawPixelRect(px, py, pw, ph, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(Math.floor(px), Math.floor(py), Math.floor(pw), Math.floor(ph));
+        }
+
+        // Menggambar Interior Rumah Penyihir (Dinding Batu, Jendela Bulan, Rak Botol, Lilin)
+        function drawWitchHutBackground() {
+            // Latar dinding batu gelap
+            drawPixelRect(0, 0, width, height, '#1b1124');
+
+            // Pola batu bata dinding pixel art
+            const brickW = 16;
+            const brickH = 8;
+            for (let y = 0; y < height - 26; y += brickH) {
+                const offset = (Math.floor(y / brickH) % 2) * 8;
+                for (let x = -offset; x < width; x += brickW) {
+                    drawPixelRect(x + 1, y + 1, brickW - 2, brickH - 2, '#241730');
+                    if ((x + y) % 32 === 0) {
+                        drawPixelRect(x + 2, y + 2, brickW - 4, brickH - 4, '#2c1d3b');
+                    }
+                }
+            }
+
+            // Lantai Kayu Pondok Penyihir
+            const floorY = height - 28;
+            drawPixelRect(0, floorY, width, 28, '#2b1810');
+            drawPixelRect(0, floorY, width, 2, '#4a2b1d');
+            for (let x = 0; x < width; x += 18) {
+                drawPixelRect(x, floorY + 2, 1, 26, '#1a0e09');
+            }
+
+            // Jendela Kayu Gotik di Kiri Atas dengan Bulan Sabit & Bintang
+            const winX = Math.max(10, Math.floor(width * 0.1));
+            const winY = Math.max(24, Math.floor(height * 0.14));
+            const winW = 28;
+            const winH = 34;
+
+            drawPixelRect(winX - 2, winY - 2, winW + 4, winH + 4, '#3d251e'); // Kusen luar
+            drawPixelRect(winX, winY, winW, winH, '#0b1026'); // Langit malam
+            // Bulan sabit pixel
+            drawPixelRect(winX + 6, winY + 6, 7, 7, '#fef08a');
+            drawPixelRect(winX + 8, winY + 5, 6, 6, '#0b1026');
+            // Bintang berkelip
+            if (Math.floor(frameCount / 30) % 2 === 0) {
+                drawPixelRect(winX + 20, winY + 9, 2, 2, '#ffffff');
+                drawPixelRect(winX + 16, winY + 22, 1, 1, '#fde047');
+            }
+            // Palang kayu jendela
+            drawPixelRect(winX + Math.floor(winW / 2) - 1, winY, 2, winH, '#3d251e');
+            drawPixelRect(winX, winY + Math.floor(winH / 2) - 1, winW, 2, '#3d251e');
+
+            // Rak Ramuan Kayu di Kanan Atas
+            const shelfX = Math.min(width - 44, Math.floor(width * 0.76));
+            const shelfY = Math.max(28, Math.floor(height * 0.17));
+            drawPixelRect(shelfX, shelfY + 12, 34, 3, '#5c3828');
+            drawPixelRect(shelfX + 3, shelfY + 15, 3, 4, '#3d251e');
+            drawPixelRect(shelfX + 28, shelfY + 15, 3, 4, '#3d251e');
+
+            // Botol-botol ramuan warna-warni di atas rak
+            drawPixelRect(shelfX + 4, shelfY + 5, 5, 7, '#ec4899');
+            drawPixelRect(shelfX + 5, shelfY + 3, 3, 2, '#d6d3d1');
+            drawPixelRect(shelfX + 13, shelfY + 4, 6, 8, '#06b6d4');
+            drawPixelRect(shelfX + 15, shelfY + 2, 2, 2, '#d6d3d1');
+            drawPixelRect(shelfX + 23, shelfY + 6, 6, 6, '#eab308');
+            drawPixelRect(shelfX + 25, shelfY + 4, 2, 2, '#d6d3d1');
+
+            // Rak kedua di bawahnya dengan Tengkorak & Buku Sihir
+            const shelf2Y = shelfY + 28;
+            drawPixelRect(shelfX, shelf2Y + 10, 34, 3, '#5c3828');
+            // Buku tebal berdiri
+            drawPixelRect(shelfX + 4, shelf2Y + 2, 4, 8, '#991b1b');
+            drawPixelRect(shelfX + 9, shelf2Y + 1, 4, 9, '#1e40af');
+            drawPixelRect(shelfX + 14, shelf2Y + 3, 4, 7, '#166534');
+            // Tengkorak hiasan pixel
+            drawPixelRect(shelfX + 23, shelf2Y + 3, 7, 5, '#e7e5e4');
+            drawPixelRect(shelfX + 24, shelf2Y + 8, 5, 2, '#d6d3d1');
+            drawPixelRect(shelfX + 24, shelf2Y + 5, 2, 2, '#1c1917');
+            drawPixelRect(shelfX + 27, shelf2Y + 5, 2, 2, '#1c1917');
+
+            // Lilin Penyihir di sebelah kiri lantai
+            const candleX = Math.max(8, Math.floor(width * 0.14));
+            const candleY = floorY - 12;
+            drawPixelRect(candleX, candleY + 4, 4, 8, '#fef3c7');
+            const flicker = Math.sin(frameCount * 0.25) > 0 ? 0 : 1;
+            drawPixelRect(candleX + 1, candleY + flicker, 2, 3, '#f97316');
+            drawPixelRect(candleX + 1, candleY + 1 + flicker, 1, 2, '#fef08a');
+        }
+
+        // Menggambar Tungku Api & Kuali Penyihir Raksasa di Tengah Bawah
+        function drawFurnaceAndCauldron() {
+            const centerX = Math.floor(width / 2);
+            const floorY = height - 28;
+
+            // Tungku batu bata besar tempat api menyala di bawah kuali
+            const stoveW = 74;
+            const stoveH = 22;
+            const stoveX = centerX - Math.floor(stoveW / 2);
+            const stoveY = floorY - stoveH + 4;
+
+            drawPixelRect(stoveX, stoveY, stoveW, stoveH, '#44403c');
+            drawPixelRect(stoveX + 3, stoveY + 3, stoveW - 6, stoveH - 3, '#292524');
+            drawPixelRect(stoveX + 2, stoveY + 10, stoveW - 4, 2, '#1c1917');
+            drawPixelRect(stoveX + 14, stoveY + 6, stoveW - 28, stoveH - 6, '#0c0a09');
+
+            // Animasi Api Tungku besar di bawah kuali
+            if (frameCount % 2 === 0) {
+                fireParticles.push({
+                    x: centerX + (Math.random() * 34 - 17),
+                    y: stoveY + 13,
+                    vy: -0.5 - Math.random() * 0.5,
+                    life: 18,
+                    color: Math.random() > 0.35 ? '#f97316' : '#facc15'
+                });
+            }
+
+            for (let i = fireParticles.length - 1; i >= 0; i--) {
+                let p = fireParticles[i];
+                p.y += p.vy;
+                p.life--;
+                drawPixelRect(p.x, p.y, 3, 3, p.color);
+                if (p.life <= 0) fireParticles.splice(i, 1);
+            }
+
+            // Kuali Besi Raksasa Penyihir (Big Cauldron)
+            const caulW = 76;
+            const caulH = 46;
+            const caulX = centerX - Math.floor(caulW / 2);
+            const caulY = stoveY - caulH + 5;
+
+            // Simpan area kuali besar untuk deteksi Drop (dalam koordinat layar asli)
+            gameState.cauldronBounds = {
+                x: (caulX - 10) * PIXEL_SCALE,
+                y: (caulY - 14) * PIXEL_SCALE,
+                w: (caulW + 20) * PIXEL_SCALE,
+                h: (caulH + 24) * PIXEL_SCALE
+            };
+
+            // Kaki kuali kokoh
+            drawPixelRect(caulX + 10, caulY + caulH - 3, 6, 7, '#1c1917');
+            drawPixelRect(caulX + caulW - 16, caulY + caulH - 3, 6, 7, '#1c1917');
+
+            // Badan bulat kuali besar (pixelated)
+            drawPixelRect(caulX + 6, caulY + 6, caulW - 12, caulH - 9, '#1e1b24');
+            drawPixelRect(caulX, caulY + 12, caulW, caulH - 20, '#1e1b24');
+            // Highlight besi di sisi kiri kuali
+            drawPixelRect(caulX + 4, caulY + 13, 4, caulH - 22, '#3f3a4a');
+            drawPixelRect(caulX + 9, caulY + 15, 2, caulH - 26, '#52525b');
+            // Pegangan cincin samping besar
+            drawPixelRect(caulX - 5, caulY + 16, 5, 9, '#52525b');
+            drawPixelRect(caulX - 3, caulY + 18, 2, 5, '#1b1124');
+            drawPixelRect(caulX + caulW, caulY + 16, 5, 9, '#52525b');
+            drawPixelRect(caulX + caulW + 1, caulY + 18, 2, 5, '#1b1124');
+
+            // Bibir atas kuali lebar
+            drawPixelRect(caulX + 3, caulY, caulW - 6, 7, '#2e2938');
+            drawPixelRect(caulX + 8, caulY + 2, caulW - 16, 4, '#09080c');
+
+            // Cairan Ramuan Menyala di dalam Kuali Besar
+            const liquidCol = gameState.cauldronIngredients.length > 0 ? '#a855f7' : gameState.liquidColor;
+            drawPixelRect(caulX + 9, caulY + 2, caulW - 18, 4, liquidCol);
+
+            // Cahaya pendaran ramuan ke atas
+            ctx.fillStyle = liquidCol + '28';
+            ctx.fillRect(caulX + 6, caulY - 14, caulW - 12, 16);
+
+            // Gelembung Ramuan naik dari kuali besar
+            if (frameCount % 6 === 0) {
+                bubbles.push({
+                    x: caulX + 12 + Math.random() * (caulW - 24),
+                    y: caulY,
+                    vy: -0.3 - Math.random() * 0.35,
+                    size: Math.random() > 0.5 ? 3 : 2,
+                    life: 34,
+                    color: liquidCol
+                });
+            }
+
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                let b = bubbles[i];
+                b.y += b.vy;
+                b.x += Math.sin(frameCount * 0.15 + i) * 0.2;
+                b.life--;
+                drawPixelRect(b.x, b.y, b.size, b.size, b.color);
+                if (b.life <= 0) bubbles.splice(i, 1);
+            }
+        }
+
+        // Efek Ledakan dari dalam Tungku menyembur ke seluruh layar
+        function triggerCauldronExplosion() {
+            gameState.isExploding = true;
+            playSound('explosion');
+
+            // Getarkan layar
+            const wrapper = document.getElementById('game-wrapper');
+            wrapper.classList.remove('shake-active');
+            void wrapper.offsetWidth;
+            wrapper.classList.add('shake-active');
+
+            // Tampilkan noda jelaga di layar
+            const soot = document.getElementById('sootScreen');
+            soot.style.transition = 'none';
+            soot.style.opacity = '1';
+            setTimeout(() => {
+                soot.style.transition = 'opacity 2.5s ease-out';
+                soot.style.opacity = '0';
+            }, 900);
+
+            const originX = Math.floor(width / 2);
+            const originY = height - 66;
+            const blastColors = ['#ffffff', '#fef08a', '#f97316', '#ef4444', '#7f1d1d', '#1c1917'];
+
+            // Semburan 150 partikel api pixel ke segala arah memenuhi layar
+            for (let i = 0; i < 150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1.5 + Math.random() * 6.5;
+                explosionParticles.push({
+                    x: originX,
+                    y: originY,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1.5,
+                    size: Math.floor(3 + Math.random() * 6),
+                    life: 40 + Math.floor(Math.random() * 35),
+                    color: blastColors[Math.floor(Math.random() * blastColors.length)]
+                });
+            }
+
+            // Gumpalan asap hitam pekat melayang ke layar
+            for (let i = 0; i < 45; i++) {
+                smokeClouds.push({
+                    x: originX + (Math.random() * 44 - 22),
+                    y: originY + (Math.random() * 20 - 10),
+                    vx: (Math.random() - 0.5) * 2.4,
+                    vy: -0.8 - Math.random() * 2.2,
+                    size: Math.floor(7 + Math.random() * 11),
+                    life: 65 + Math.floor(Math.random() * 40),
+                    color: Math.random() > 0.4 ? '#292524' : '#44403c'
+                });
+            }
+
+            setTimeout(() => {
+                gameState.isExploding = false;
+            }, 1400);
+        }
+
+        function drawExplosionEffects() {
+            // Gambar partikel ledakan api
+            for (let i = explosionParticles.length - 1; i >= 0; i--) {
+                let p = explosionParticles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.08; // Gravitasi ringan
+                p.life--;
+                drawPixelRect(p.x, p.y, p.size, p.size, p.color);
+                if (p.life <= 0) explosionParticles.splice(i, 1);
+            }
+
+            // Gambar kepulan asap hitam
+            for (let i = smokeClouds.length - 1; i >= 0; i--) {
+                let s = smokeClouds[i];
+                s.x += s.vx;
+                s.y += s.vy;
+                s.life--;
+                drawPixelRect(s.x, s.y, s.size, s.size, s.color);
+                if (s.life <= 0) smokeClouds.splice(i, 1);
+            }
+        }
+
+        // Loop Animasi Utama Canvas
+        function renderLoop() {
+            frameCount++;
+            ctx.save();
+            ctx.scale(PIXEL_SCALE, PIXEL_SCALE);
+
+            drawWitchHutBackground();
+            drawFurnaceAndCauldron();
+            drawExplosionEffects();
+
+            ctx.restore();
+            requestAnimationFrame(renderLoop);
+        }
+
+        /**
+         * ============================================================================
+         * 4. LOGIKA UI, DRAG & DROP SENTUH / KLIK, DAN PENCOCOKAN RESEP
+         * ============================================================================
+         */
+        const elementsRack = document.getElementById('elementsRack');
+        const dragGhost = document.getElementById('dragGhost');
+        let activeDragSymbol = null;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let isDraggingMoved = false;
+
+        function renderElementsRack() {
+            elementsRack.innerHTML = '';
+            ELEMENTS.forEach(el => {
+                const card = document.createElement('div');
+                card.className = `element-card ${el.category}`;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start w-full">
+                        <span class="text-[8px] opacity-90">${el.number}</span>
+                    </div>
+                    <div class="text-center text-base sm:text-lg font-bold tracking-tighter drop-shadow-[0_2px_0_rgba(0,0,0,0.6)]">
+                        ${el.symbol}
+                    </div>
+                    <div class="text-[6.5px] text-center truncate w-full opacity-95">
+                        ${el.name}
+                    </div>
+                `;
+
+                // Dukungan Touch (Android) - Bisa tap langsung atau drag ke tungku
+                card.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    dragStartX = touch.clientX;
+                    dragStartY = touch.clientY;
+                    isDraggingMoved = false;
+                    activeDragSymbol = el;
+                }, { passive: true });
+
+                card.addEventListener('touchmove', (e) => {
+                    if (!activeDragSymbol) return;
+                    const touch = e.touches[0];
+                    const dx = touch.clientX - dragStartX;
+                    const dy = touch.clientY - dragStartY;
+
+                    // Jika ditarik ke atas menuju kuali, aktifkan ghost drag
+                    if (!isDraggingMoved && Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
+                        isDraggingMoved = true;
+                        startDragVisual(el, touch.clientX, touch.clientY);
+                    }
+
+                    if (isDraggingMoved) {
+                        e.preventDefault();
+                        moveDragVisual(touch.clientX, touch.clientY);
+                    }
+                }, { passive: false });
+
+                card.addEventListener('touchend', (e) => {
+                    if (!activeDragSymbol) return;
+                    const touch = e.changedTouches[0];
+                    if (isDraggingMoved) {
+                        endDragVisual(touch.clientX, touch.clientY);
+                    } else {
+                        // Tap cepat langsung memasukkan unsur ke tungku
+                        addIngredientToCauldron(el.symbol);
+                    }
+                    activeDragSymbol = null;
+                    isDraggingMoved = false;
+                });
+
+                // Dukungan Mouse Desktop - Drag maupun Klik Langsung
+                card.addEventListener('mousedown', (e) => {
+                    dragStartX = e.clientX;
+                    dragStartY = e.clientY;
+                    isDraggingMoved = false;
+                    activeDragSymbol = el;
+                });
+
+                elementsRack.appendChild(card);
+            });
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (!activeDragSymbol) return;
+            const dist = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
+            if (!isDraggingMoved && dist > 8) {
+                isDraggingMoved = true;
+                startDragVisual(activeDragSymbol, e.clientX, e.clientY);
+            }
+            if (isDraggingMoved) {
+                moveDragVisual(e.clientX, e.clientY);
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (!activeDragSymbol) return;
+            if (isDraggingMoved) {
+                endDragVisual(e.clientX, e.clientY);
+            } else {
+                // Klik langsung pada kartu memasukkan unsur ke kuali
+                addIngredientToCauldron(activeDragSymbol.symbol);
+            }
+            activeDragSymbol = null;
+            isDraggingMoved = false;
+        });
+
+        function startDragVisual(el, x, y) {
+            initAudio();
+            dragGhost.innerHTML = `
+                <div class="element-card ${el.category} shadow-2xl">
+                    <span class="text-[8px]">${el.number}</span>
+                    <div class="text-center text-lg font-bold">${el.symbol}</div>
+                    <div class="text-[6.5px] text-center">${el.name}</div>
+                </div>
+            `;
+            dragGhost.style.left = x + 'px';
+            dragGhost.style.top = y + 'px';
+            dragGhost.classList.remove('hidden');
+        }
+
+        function moveDragVisual(x, y) {
+            dragGhost.style.left = x + 'px';
+            dragGhost.style.top = y + 'px';
+        }
+
+        function endDragVisual(x, y) {
+            dragGhost.classList.add('hidden');
+            if (!activeDragSymbol) return;
+
+            // Cek apakah dilepas di area tungku kuali (atau bagian tengah layar)
+            const b = gameState.cauldronBounds;
+            const inCauldron = (
+                x >= b.x - 45 &&
+                x <= b.x + b.w + 45 &&
+                y >= b.y - 70 &&
+                y <= b.y + b.h + 30
+            );
+
+            if (inCauldron) {
+                addIngredientToCauldron(activeDragSymbol.symbol);
+            }
+        }
+
+        function addIngredientToCauldron(symbol) {
+            if (gameState.isExploding) return;
+            if (gameState.cauldronIngredients.length >= 3) {
+                // Jika penuh, ganti slot terakhir atau beri tanda
+                gameState.cauldronIngredients.shift();
+            }
+            gameState.cauldronIngredients.push(symbol);
+            playSound('drop');
+            updateCauldronSlotsUI();
+        }
+
+        function updateCauldronSlotsUI() {
+            const slots = [
+                document.getElementById('slot1'),
+                document.getElementById('slot2'),
+                document.getElementById('slot3')
+            ];
+
+            slots.forEach((slotEl, idx) => {
+                const sym = gameState.cauldronIngredients[idx];
+                if (sym) {
+                    const elData = ELEMENTS.find(e => e.symbol === sym);
+                    slotEl.textContent = sym;
+                    slotEl.className = `w-9 h-9 sm:w-10 sm:h-10 border-2 border-white flex items-center justify-center text-xs font-bold ${elData ? elData.category : 'bg-purple-700'}`;
+                } else {
+                    slotEl.textContent = idx === 2 ? 'OPT' : '?';
+                    slotEl.className = idx === 2
+                        ? 'w-9 h-9 sm:w-10 sm:h-10 border-2 border-dashed border-purple-400/50 flex items-center justify-center text-[8px] text-purple-400 bg-purple-950/40'
+                        : 'w-9 h-9 sm:w-10 sm:h-10 border-2 border-dashed border-purple-400 flex items-center justify-center text-xs text-purple-300 bg-purple-950/60';
+                }
+            });
+        }
+
+        function updateHeaderUI() {
+            document.getElementById('scoreDisplay').textContent = gameState.score;
+            document.getElementById('discoveredCount').textContent = `${gameState.discoveredRecipes.size}/${RECIPES.length} RAMUAN`;
+
+            const heartsContainer = document.getElementById('heartsDisplay');
+            heartsContainer.innerHTML = '';
+            for (let i = 0; i < gameState.maxHearts; i++) {
+                const heart = document.createElement('span');
+                heart.className = 'text-xs sm:text-sm';
+                heart.textContent = i < gameState.hearts ? '❤️' : '🖤';
+                heartsContainer.appendChild(heart);
+            }
+        }
+
+        function pickNextQuest() {
+            const unfound = RECIPES.filter(r => !gameState.discoveredRecipes.has(r.id));
+            const pool = unfound.length > 0 ? unfound : RECIPES;
+            const chosen = pool[Math.floor(Math.random() * pool.length)];
+            gameState.currentQuest = chosen;
+            document.getElementById('questHint').textContent = `Buat ${chosen.name}: ${chosen.hint}`;
+        }
+
+        // Proses Mencampur Unsur di dalam Tungku
+        function brewCauldron() {
+            if (gameState.isExploding) return;
+            if (gameState.cauldronIngredients.length < 2) {
+                document.getElementById('questHint').textContent = '⚠️ Masukkan minimal 2 unsur ke dalam tungku dulu!';
+                playSound('clear');
+                return;
+            }
+
+            // Urutkan array bahan agar urutan masuk tidak memengaruhi hasil
+            const sortedInput = [...gameState.cauldronIngredients].sort().join(',');
+
+            const matchedRecipe = RECIPES.find(r => {
+                const sortedRecipe = [...r.ingredients].sort().join(',');
+                return sortedInput === sortedRecipe;
+            });
+
+            if (matchedRecipe) {
+                // REAKSI SUKSES!
+                playSound('success');
+                gameState.score += 100;
+                gameState.liquidColor = matchedRecipe.color;
+                gameState.discoveredRecipes.add(matchedRecipe.id);
+                gameState.cauldronIngredients = [];
+                updateCauldronSlotsUI();
+                updateHeaderUI();
+                renderGrimoireList();
+
+                showResultModal(
+                    true,
+                    '🧪',
+                    'RACIKAN BERHASIL!',
+                    `${matchedRecipe.formula} — ${matchedRecipe.name}`,
+                    matchedRecipe.desc
+                );
+                pickNextQuest();
+            } else {
+                // REAKSI SALAH -> LEDAKAN DARI TUNGKU KE LAYAR!
+                gameState.hearts = Math.max(0, gameState.hearts - 1);
+                gameState.cauldronIngredients = [];
+                gameState.liquidColor = '#ef4444';
+                updateCauldronSlotsUI();
+                updateHeaderUI();
+                triggerCauldronExplosion();
+
+                if (gameState.hearts === 0) {
+                    setTimeout(() => {
+                        showResultModal(
+                            false,
+                            '💥',
+                            'PONDOK HANCUR!',
+                            'Kuali Meledak Hebat!',
+                            `Skor Akhirmu: ${gameState.score}. Gas mulia (He, Ne, Ar) tidak bisa bereaksi dan campuran yang salah membuat kuali meledak!`
+                        );
+                    }, 1200);
+                } else {
+                    document.getElementById('questHint').textContent = '💥 DUAR! Campuran salah & kuali meledak! Cek Buku Resep.';
+                }
+            }
+        }
+
+        function showResultModal(isSuccess, icon, title, formula, desc) {
+            const modal = document.getElementById('resultModal');
+            document.getElementById('resultIcon').textContent = icon;
+            const titleEl = document.getElementById('resultTitle');
+            titleEl.textContent = title;
+            titleEl.className = isSuccess
+                ? 'text-sm sm:text-base text-emerald-300 mb-2'
+                : 'text-sm sm:text-base text-red-400 mb-2';
+            document.getElementById('resultFormula').textContent = formula;
+            document.getElementById('resultDesc').textContent = desc;
+
+            const btn = document.getElementById('btnNextResult');
+            btn.textContent = gameState.hearts === 0 ? 'MAIN LAGI' : 'LANJUTKAN';
+            modal.classList.remove('hidden');
+        }
+
+        function renderGrimoireList() {
+            const list = document.getElementById('recipeList');
+            list.innerHTML = '';
+            RECIPES.forEach(r => {
+                const found = gameState.discoveredRecipes.has(r.id);
+                const item = document.createElement('div');
+                item.className = `p-2.5 border-2 ${found ? 'border-emerald-500 bg-emerald-950/40' : 'border-purple-800 bg-purple-950/40'}`;
+                item.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-yellow-300 font-bold">${r.formula} - ${r.name}</span>
+                        <span>${found ? '✅' : '🔒'}</span>
+                    </div>
+                    <p class="text-purple-200 text-[8px] sm:text-[9px]">Bahan: ${r.ingredients.join(' + ')}</p>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        /**
+         * ============================================================================
+         * 5. EVENT LISTENERS TOMBOL & INISIALISASI GAME
+         * ============================================================================
+         */
+        document.getElementById('btnBrew').addEventListener('click', brewCauldron);
+
+        document.getElementById('btnClear').addEventListener('click', () => {
+            gameState.cauldronIngredients = [];
+            playSound('clear');
+            updateCauldronSlotsUI();
+        });
+
+        document.getElementById('btnGrimoire').addEventListener('click', () => {
+            renderGrimoireList();
+            document.getElementById('grimoireModal').classList.remove('hidden');
+        });
+
+        document.getElementById('btnCloseGrimoire').addEventListener('click', () => {
+            document.getElementById('grimoireModal').classList.add('hidden');
+        });
+
+        document.getElementById('btnNextResult').addEventListener('click', () => {
+            document.getElementById('resultModal').classList.add('hidden');
+            if (gameState.hearts === 0) {
+                // Reset permainan jika nyawa habis
+                gameState.score = 0;
+                gameState.hearts = 3;
+                gameState.discoveredRecipes.clear();
+                gameState.liquidColor = '#10b981';
+                updateHeaderUI();
+                renderGrimoireList();
+                pickNextQuest();
+            }
+        });
+
+        // Tombol & Wheel Scroll Horizontal Rak Unsur Periodik
+        document.getElementById('btnScrollLeft').addEventListener('click', () => {
+            elementsRack.scrollBy({ left: -240, behavior: 'smooth' });
+        });
+        document.getElementById('btnScrollRight').addEventListener('click', () => {
+            elementsRack.scrollBy({ left: 240, behavior: 'smooth' });
+        });
+        elementsRack.addEventListener('wheel', (e) => {
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                elementsRack.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
+
+        // Mulai Game saat Halaman Selesai Dimuat
+        window.onload = function () {
+            renderElementsRack();
+            updateCauldronSlotsUI();
+            updateHeaderUI();
+            renderGrimoireList();
+            pickNextQuest();
+            renderLoop();
+        };
+    </script>
+</body>
+</html>
